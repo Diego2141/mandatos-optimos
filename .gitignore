@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Datos propietarios de gestores: nunca al repo
+data/*.csv
+!data/example_*.csv
+outputs/*
+!outputs/.gitkeep
