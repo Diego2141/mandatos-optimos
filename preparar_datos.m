@@ -39,8 +39,13 @@ PASIVOS = { 'passive_data_global',     'global'
             'passive_data_ultrashort', 'ultrashort' };
 
 %% ----------------------------------------------------- Construir y guardar
+% ActiveData.mat es la base de referencia y no se toca: el modelo actual
+% corre sobre ella y es el patron contra el que se compara cualquier
+% extraccion nueva. Solo se escriben los archivos con sufijo 2.
+PROTEGIDOS = {'ActiveData.mat', 'PassiveData.mat', 'PassiveData_IndicesGOI.mat'};
+
 ActiveData = construir_panel(CARPETA_DATA, ACTIVOS, 'MANDATOS ACTIVOS');
-save('ActiveData2.mat', 'ActiveData');
+guardar_seguro('ActiveData2.mat', 'ActiveData', ActiveData, PROTEGIDOS);
 
 fprintf('\n%s\n', repmat('=', 1, 78));
 fprintf('  GUARDADO\n');
@@ -50,7 +55,7 @@ fprintf('  ActiveData2.mat   -> variable ActiveData   (%d filas, %d vars)\n', ..
 
 if PROCESAR_PASIVOS
     PassiveData = construir_panel(CARPETA_DATA, PASIVOS, 'MANDATOS PASIVOS');
-    save('PassiveData2.mat', 'PassiveData');
+    guardar_seguro('PassiveData2.mat', 'PassiveData', PassiveData, PROTEGIDOS);
     fprintf('  PassiveData2.mat  -> variable PassiveData  (%d filas, %d vars)\n', ...
             height(PassiveData), width(PassiveData));
 else
@@ -121,6 +126,26 @@ function ruta = resolver_archivo(carpeta, base)
           ['No se encontro "%s" en "%s" con ninguna de estas extensiones: %s\n' ...
            'Revisa el nombre exacto con: dir(''%s'')'], ...
           base, carpeta, strjoin(exts, ' '), carpeta);
+end
+
+
+function guardar_seguro(archivo, nombre_var, valor, protegidos)
+% Guarda impidiendo escribir sobre las bases de referencia.
+%
+% ActiveData.mat es el patron contra el que se compara toda extraccion
+% nueva. Perderlo por un nombre mal escrito deja el proyecto sin referencia
+% y no hay forma de recuperarlo desde el repositorio: los .mat no se
+% versionan, con razon.
+
+    [~, base, ext] = fileparts(archivo);
+    if any(strcmpi([base ext], protegidos))
+        error('preparar_datos:archivoProtegido', ...
+              ['"%s" es una base de referencia y no se sobrescribe.\n' ...
+               'Los scripts solo escriben archivos con sufijo 2.'], archivo);
+    end
+
+    S.(nombre_var) = valor; %#ok<STRNU>
+    save(archivo, '-struct', 'S');
 end
 
 
