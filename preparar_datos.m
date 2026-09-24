@@ -72,6 +72,7 @@ function P = construir_panel(carpeta, spec, titulo)
 
         fprintf('\n>> %s  (%s)\n', base, ruta);
         T = cargar_tabla(ruta);
+        T = normalizar_fechas(T, base);
         inspeccionar_tabla(T, sprintf('%s  [tramo: %s]', base, tramo));
 
         T.tramo = repmat(string(tramo), height(T), 1);
@@ -107,6 +108,56 @@ function ruta = resolver_archivo(carpeta, base)
           ['No se encontro "%s" en "%s" con ninguna de estas extensiones: %s\n' ...
            'Revisa el nombre exacto con: dir(''%s'')'], ...
           base, carpeta, strjoin(exts, ' '), carpeta);
+end
+
+
+function T = normalizar_fechas(T, origen)
+% Crea una variable `date` de tipo datetime a partir de `month_date`.
+%
+% Los archivos traen `month_date` como texto 'yyyy-MM'. Sin convertirla,
+% toda la validacion de panel (balanceo, duplicados, cobertura) se salta en
+% silencio, y el modelo no encuentra la variable `date` que usa por nombre.
+
+    vars = string(T.Properties.VariableNames);
+
+    if ismember("date", vars) && isdatetime(T.date)
+        return
+    end
+
+    if ~ismember("month_date", vars)
+        error('preparar_datos:sinFecha', ...
+              ['"%s" no tiene ni `date` ni `month_date`. Sin variable de\n' ...
+               'fecha no se puede validar el panel ni alinear los retornos.'], ...
+              origen);
+    end
+
+    md = T.month_date;
+    if iscell(md) || isstring(md) || ischar(md)
+        d = datetime(string(md), 'InputFormat', 'yyyy-MM');
+    elseif isdatetime(md)
+        d = md;
+    elseif isnumeric(md)
+        error('preparar_datos:fechaNumerica', ...
+              ['"%s": `month_date` es numerica. No se adivina si son fechas\n' ...
+               'seriales de MATLAB o de Excel: la diferencia son 693960 dias.'], ...
+              origen);
+    else
+        error('preparar_datos:fechaTipo', ...
+              '"%s": `month_date` es %s, tipo no soportado.', origen, class(md));
+    end
+
+    if any(isnat(d))
+        malas = find(isnat(d), 5);
+        error('preparar_datos:fechaNoParseable', ...
+              ['"%s": %d valores de `month_date` no se pudieron interpretar\n' ...
+               'como yyyy-MM. Primeras filas problematicas: %s'], ...
+              origen, sum(isnat(d)), mat2str(malas'));
+    end
+
+    d.Format = 'yyyy-MM';
+    T.date = d;
+    fprintf('   `date` creada desde `month_date` (%s a %s)\n', ...
+            string(min(d)), string(max(d)));
 end
 
 
@@ -223,17 +274,57 @@ function validar_panel(P, titulo)
 
     % 2. Panel balanceado: el modelo asume misma cantidad de fechas por fondo
     if tiene("fund") && tiene("date")
-        [g, ~]   = findgroups(P.fund, P.tramo);
-        n_obs    = splitapply(@numel, P.date, g);
-        fprintf('  Observaciones por fondo-tramo: min=%d  mediana=%d  max=%d\n', ...
+        meses_totales = numel(unique(P.date));
+        [g, f_id, f_tr] = findgroups(P.fund, P.tramo);
+        n_obs   = splitapply(@numel, P.date, g);
+        f_ini   = splitapply(@min,   P.date, g);
+        f_fin   = splitapply(@max,   P.date, g);
+
+        fprintf('  Meses distintos en la muestra: %d  (%s a %s)\n', meses_totales, ...
+                string(min(P.date)), string(max(P.date)));
+        fprintf('  Observaciones por fondo: min=%d  mediana=%d  max=%d\n', ...
                 min(n_obs), round(median(n_obs)), max(n_obs));
-        if numel(unique(n_obs)) > 1
-            fprintf(['  AVISO: panel DESBALANCEADO. El modelo preasigna\n' ...
-                     '         nan(length(dates), N) y asume paneles completos.\n' ...
-                     '         Con historias distintas hay que hacer join por\n' ...
-                     '         fecha, no asignacion posicional.\n']);
+
+        incompletos = find(n_obs < meses_totales);
+        if isempty(incompletos)
+            fprintf('  OK: panel balanceado (%d observaciones por fondo).\n', meses_totales);
         else
-            fprintf('  OK: panel balanceado (%d observaciones por fondo).\n', n_obs(1));
+            fprintf('  DESBALANCEADO: %d de %d fondos no tienen los %d meses.\n', ...
+                    numel(incompletos), numel(n_obs), meses_totales);
+            detalle = table(f_id(incompletos), f_tr(incompletos), ...
+                            n_obs(incompletos), meses_totales - n_obs(incompletos), ...
+                            f_ini(incompletos), f_fin(incompletos), ...
+                'VariableNames', {'fund','tramo','n_obs','faltan','desde','hasta'});
+            disp(detalle);
+            fprintf(['    Main_OptimalAllocation_Managers_V2.m:13 asigna\n' ...
+                     '    excess_return_matrix(:,i) suponiendo length(dates)\n' ...
+                     '    valores. Con estos fondos lanza error de dimensiones.\n' ...
+                     '    El arreglo correcto es unstack() por fecha, no recortar\n' ...
+                     '    la muestra al minimo comun.\n']);
+        end
+
+        % --- Sesgo de supervivencia -------------------------------------
+        % Un panel de fondos mutuos completo a 10 anios no es natural: los
+        % fondos cierran, se fusionan y se lanzan. Si casi todos tienen
+        % historia integra, el universo se filtro a sobrevivientes y el
+        % alpha estimado es una cota superior.
+        completos = sum(n_obs == meses_totales);
+        pct_comp  = 100 * completos / numel(n_obs);
+        fprintf('  Historia completa: %d de %d fondos (%.1f%%)\n', ...
+                completos, numel(n_obs), pct_comp);
+
+        n_altas = sum(f_ini > min(P.date));
+        n_bajas = sum(f_fin < max(P.date));
+        fprintf('  Fondos que entran despues del inicio: %d | que salen antes del final: %d\n', ...
+                n_altas, n_bajas);
+
+        if pct_comp > 90 && meses_totales >= 60
+            fprintf(['  AVISO - SESGO DE SUPERVIVENCIA: %.0f%% de los fondos\n' ...
+                     '         cubren los %d meses completos y solo %d causan baja.\n' ...
+                     '         Si el extractor no incluyo fondos liquidados o\n' ...
+                     '         fusionados, alpha esta inflado y N* es cota superior.\n' ...
+                     '         Hay que confirmarlo con la fuente y declararlo.\n'], ...
+                     pct_comp, meses_totales, n_bajas);
         end
 
         % 3. Claves duplicadas
@@ -263,5 +354,38 @@ function validar_panel(P, titulo)
         fprintf(['  AVISO: no hay variable "fee".\n' ...
                  '         Main_OptimalAllocation_Managers_V2.m:18 la usa para\n' ...
                  '         reconstruir el retorno bruto. Sin ella ese paso falla.\n']);
+    else
+        % :18 hace fee./(12*100), o sea la trata como porcentaje anual.
+        fprintf('  fee: rango [%.4f, %.4f] -- se interpreta como %% anual en :18\n', ...
+                min(P.fee), max(P.fee));
+        if max(P.fee) < 0.05
+            fprintf(['  AVISO: fee maximo < 0.05. Si viniera en decimal y no en\n' ...
+                     '         porcentaje, :18 lo dividiria por 100 de mas.\n']);
+        end
+        n_cero = sum(P.fee == 0);
+        if n_cero > 0
+            fondos_cero = unique(P.fund(P.fee == 0));
+            fprintf(['  AVISO: %d fila(s) con fee exactamente 0, en %d fondo(s).\n' ...
+                     '         Un mandato sin comision no existe: probablemente\n' ...
+                     '         es un faltante codificado como cero. El termino de\n' ...
+                     '         comisiones decide N* al margen, asi que importa.\n'], ...
+                     n_cero, numel(fondos_cero));
+            disp(fondos_cero');
+        end
+    end
+
+    % 6. aum: no lo usa el modelo hoy, pero si algun dia se pondera por tamanio
+    if tiene("aum") && tiene("fund")
+        [g, fondos_a] = findgroups(P.fund);
+        falt_aum = splitapply(@(x) sum(ismissing(x)), P.aum, g);
+        n_obs_a  = splitapply(@numel, P.aum, g);
+        sin_aum  = fondos_a(falt_aum == n_obs_a);
+        if ~isempty(sin_aum)
+            fprintf(['  AVISO: %d fondo(s) sin ningun dato de aum.\n' ...
+                     '         El modelo equipondera, asi que hoy no estorba;\n' ...
+                     '         bloquea cualquier ponderacion por tamanio.\n'], ...
+                     numel(sin_aum));
+            disp(sin_aum');
+        end
     end
 end
