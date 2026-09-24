@@ -1,35 +1,32 @@
 # Datos
 
-Los CSV reales de gestores **no se versionan** (ver `.gitignore`). Solo se
-suben archivos `example_*.csv` con datos sinteticos.
+**Ningun archivo de esta carpeta se versiona.** Contiene datos internos del
+BCRP sobre gestores externos. El `.gitignore` bloquea `.mat`, `.csv` y `.xlsx`
+en todo el arbol del repositorio.
 
-## Esquema
+Para correr el codigo, coloca aqui los `.mat` desde la ruta de trabajo en `H:`.
 
-### `returns.csv`
-| columna | tipo | nota |
+## Archivos esperados
+
+| Archivo | Contenido | Pendiente de documentar |
 |---|---|---|
-| `date` | ISO `YYYY-MM-DD` | fin de periodo |
-| `manager_id` | texto | identificador estable del mandato |
-| `return` | decimal | `0.012` = 1.2%. **Neto o bruto de comisiones: decidelo una vez y documentalo**, porque el modelo de costos resta fees por separado y contarlos dos veces sesga N* a la baja |
+| `ActiveData2.mat` | | variables, dimensiones, frecuencia, periodo |
+| `PassiveData2.mat` | | variables, dimensiones, frecuencia, periodo |
+| `ManagersActiveData.mat` | | identificadores de gestor, moneda, neto/bruto de comisiones |
+| `Global_ActiveData.mat` | | |
+| `Global_PassiveData.mat` | | |
+| `PassiveData_IndicesGOI.mat` | | |
 
-### `benchmark.csv`
-| columna | tipo |
-|---|---|
-| `date` | ISO `YYYY-MM-DD` |
-| `benchmark_id` | texto |
-| `return` | decimal |
+Esta tabla se completa al revisar el codigo. Sin ella el repositorio no es
+reproducible por nadie mas: el codigo esta versionado pero nadie sabe que
+tiene que poner en `data/` ni con que formato.
 
-### `managers.csv` (opcional)
-| columna | tipo |
-|---|---|
-| `manager_id` | texto |
-| `benchmark_id` | texto |
-| `fee` | decimal anual |
-| `aum` | numerico |
+## Preguntas que la documentacion debe responder
 
-## Advertencia sobre sesgo de supervivencia
-
-Si tu panel solo contiene gestores vivos hoy, el alpha medio estimado esta
-inflado y `N*` saldra mas alto de lo que corresponde. Incluye mandatos
-terminados con su historia hasta la fecha de cese, o trata el resultado como
-una cota superior y dilo explicitamente.
+- Frecuencia de los retornos (diaria, mensual) y periodo cubierto.
+- Si los retornos vienen **netos o brutos de comisiones**. Si ya vienen netos
+  y el modelo resta comisiones aparte, el costo se cuenta dos veces y `N*`
+  sale sesgado a la baja.
+- Si el panel incluye mandatos terminados o solo vigentes. Si solo hay
+  vigentes, hay sesgo de supervivencia y `N*` es una cota superior.
+- Moneda y si los retornos estan cubiertos cambiariamente.
