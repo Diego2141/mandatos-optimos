@@ -1,21 +1,9 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-*.egg-info/
-build/
-dist/
-.pytest_cache/
-.ruff_cache/
-.ipynb_checkpoints/
-.DS_Store
-Thumbs.db
-
 # ---------------------------------------------------------------------------
 # DATOS: nada con datos de gestores entra al repo, este donde este.
 # Un repo privado sigue siendo un servidor externo, y el historial de git
 # conserva el archivo aunque despues lo borres.
 # ---------------------------------------------------------------------------
+*.mat
 *.csv
 *.xlsx
 *.xls
@@ -40,12 +28,42 @@ Thumbs.db
 # Unica excepcion: datos sinteticos de ejemplo, explicitamente nombrados
 !data/example_*.csv
 
-# Credenciales
+# --- Resultados generados: se regeneran corriendo el codigo ---
+*.png
+*.jpg
+*.pdf
+*.eps
+*.svg
+*.log
+outputs/*
+!outputs/.gitkeep
+
+# --- MATLAB ---
+*.asv
+*.m~
+*.fig
+*.mex*
+*.mlx.bak
+slprj/
+codegen/
+
+# --- Credenciales ---
 .env
 *.key
 *.pem
 credentials*
 secrets*
 
-outputs/*
-!outputs/.gitkeep
+# --- Basura del sistema ---
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# --- Python (por si se usa para analisis auxiliar) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
