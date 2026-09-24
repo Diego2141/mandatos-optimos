@@ -9,9 +9,43 @@ dist/
 .ruff_cache/
 .ipynb_checkpoints/
 .DS_Store
+Thumbs.db
 
-# Datos propietarios de gestores: nunca al repo
-data/*.csv
+# ---------------------------------------------------------------------------
+# DATOS: nada con datos de gestores entra al repo, este donde este.
+# Un repo privado sigue siendo un servidor externo, y el historial de git
+# conserva el archivo aunque despues lo borres.
+# ---------------------------------------------------------------------------
+*.csv
+*.xlsx
+*.xls
+*.xlsm
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.dta
+*.sav
+*.h5
+*.hdf5
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+*.accdb
+*.zip
+*.7z
+*.rar
+
+# Unica excepcion: datos sinteticos de ejemplo, explicitamente nombrados
 !data/example_*.csv
+
+# Credenciales
+.env
+*.key
+*.pem
+credentials*
+secrets*
+
 outputs/*
 !outputs/.gitkeep
