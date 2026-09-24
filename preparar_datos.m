@@ -24,6 +24,12 @@ clear; clc;
 %% ------------------------------------------------------------------ Config
 CARPETA_DATA = 'Data';
 
+% El foco actual son los mandatos activos. El modelo sigue tomando el pasivo
+% de PassiveData_IndicesGOI.mat (Main_OptimalAllocation_Managers_V2.m:119),
+% que alimenta alpha_passive y TE_passive en :138 y :140. Poner esto en true
+% procesa tambien los tres archivos passive_data_* y genera PassiveData2.mat.
+PROCESAR_PASIVOS = false;
+
 ACTIVOS = { 'data_global',         'global'
             'data_short',          'short'
             'data_ultrashort',     'ultrashort' };
@@ -33,19 +39,26 @@ PASIVOS = { 'passive_data_global',     'global'
             'passive_data_ultrashort', 'ultrashort' };
 
 %% ----------------------------------------------------- Construir y guardar
-ActiveData  = construir_panel(CARPETA_DATA, ACTIVOS,  'MANDATOS ACTIVOS');
-PassiveData = construir_panel(CARPETA_DATA, PASIVOS, 'MANDATOS PASIVOS');
-
-save('ActiveData2.mat',  'ActiveData');
-save('PassiveData2.mat', 'PassiveData');
+ActiveData = construir_panel(CARPETA_DATA, ACTIVOS, 'MANDATOS ACTIVOS');
+save('ActiveData2.mat', 'ActiveData');
 
 fprintf('\n%s\n', repmat('=', 1, 78));
 fprintf('  GUARDADO\n');
 fprintf('%s\n', repmat('=', 1, 78));
 fprintf('  ActiveData2.mat   -> variable ActiveData   (%d filas, %d vars)\n', ...
         height(ActiveData), width(ActiveData));
-fprintf('  PassiveData2.mat  -> variable PassiveData  (%d filas, %d vars)\n', ...
-        height(PassiveData), width(PassiveData));
+
+if PROCESAR_PASIVOS
+    PassiveData = construir_panel(CARPETA_DATA, PASIVOS, 'MANDATOS PASIVOS');
+    save('PassiveData2.mat', 'PassiveData');
+    fprintf('  PassiveData2.mat  -> variable PassiveData  (%d filas, %d vars)\n', ...
+            height(PassiveData), width(PassiveData));
+else
+    fprintf('  PassiveData2.mat  -> OMITIDO (PROCESAR_PASIVOS = false)\n');
+    fprintf('    El modelo sigue usando PassiveData_IndicesGOI.mat para\n');
+    fprintf('    alpha_passive y TE_passive. Si algun dia se reemplaza por\n');
+    fprintf('    los archivos passive_data_*, poner PROCESAR_PASIVOS = true.\n');
+end
 fprintf('\n  Estos .mat NO deben subirse al repositorio: contienen datos\n');
 fprintf('  de gestores. El .gitignore ya bloquea *.mat.\n\n');
 
