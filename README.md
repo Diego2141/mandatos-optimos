@@ -1,38 +1,34 @@
 # mandatos-optimos
 
-Numero optimo de mandatos externos de gestion activa.
+Numero optimo de mandatos externos de gestion activa. Codigo en MATLAB.
 
-Codigo en **MATLAB**. Los datos de gestores son internos del BCRP y **no se
-versionan**: el repositorio contiene solo codigo y documentacion.
+Los datos de gestores son internos del BCRP y **no se versionan**: el
+`.gitignore` bloquea `.mat`, `.csv`, `.xlsx` y formatos afines en cualquier
+ruta del repositorio. Los graficos y tablas generados tampoco se versionan;
+se reproducen corriendo el codigo.
 
-## Estructura
+## Para correr el analisis
+
+Los `.mat` no estan aqui. Hay que copiarlos desde la ruta de trabajo en `H:`
+junto a los `.m`.
+
+## Pendiente de documentar
+
+Sin esto el repositorio no es reproducible por nadie mas: el codigo esta
+versionado pero nadie sabe que archivos hacen falta ni con que formato.
+
+- Que variables y dimensiones tiene cada `.mat`, su frecuencia y periodo.
+- Si los retornos vienen **netos o brutos de comisiones**. Si ya vienen netos
+  y el modelo resta comisiones aparte, el costo se cuenta dos veces y `N*`
+  sale sesgado a la baja.
+- Si el panel incluye mandatos terminados o solo vigentes. Si solo hay
+  vigentes, hay sesgo de supervivencia y `N*` es una cota superior.
+- Moneda y si los retornos estan cubiertos cambiariamente.
+
+## Antes de cada commit
 
 ```
-scripts/   rutinas ejecutables (Main_*.m)
-src/       funciones reutilizables
-data/      archivos .mat locales -- ignorados por git, ver data/README.md
-outputs/   graficos y tablas generados -- ignorados por git
+git status --short
 ```
 
-## Reproducir el analisis
-
-Los `.mat` no estan en el repositorio. Para correr el codigo hay que
-colocarlos en `data/` con los nombres que documenta
-[`data/README.md`](data/README.md).
-
-```matlab
-addpath(genpath('src'));
-run('scripts/Main_OptimalAllocation_Managers_V2.m');
-```
-
-Los resultados se escriben en `outputs/`, que git ignora: se regeneran
-corriendo el codigo, no se guardan.
-
-## Reglas del repositorio
-
-1. **Ningun dato entra al repositorio.** El `.gitignore` bloquea `.mat`,
-   `.csv`, `.xlsx` y formatos afines en cualquier ruta. Un repo privado sigue
-   siendo un servidor externo, y el historial de git conserva el archivo
-   aunque despues se borre.
-2. **Ningun grafico ni salida entra al repositorio.** Se regeneran.
-3. **Antes de cada commit**, revisar `git status --short` linea por linea.
+Revisar linea por linea. Si aparece un `.mat`, `.xlsx` o `.png`, parar.
