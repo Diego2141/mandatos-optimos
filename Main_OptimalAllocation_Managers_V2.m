@@ -4,44 +4,29 @@ clear; clc;
 %% Carga de data
 load('ActiveData2.mat')
 
+% La matriz se arma asignando por posicion (linea 17), lo que supone que las
+% filas de cada fondo vienen ordenadas por fecha. Al apilar tres CSV eso no
+% esta garantizado y un desorden no daria error: desalinearia la matriz.
+ActiveData = sortrows(ActiveData,{'fund','date'});
+
+% Un fondo del tramo short no reporta el ultimo mes. Se descarta ese mes para
+% todos: con el panel completo, el resto del codigo funciona sin cambios.
+ActiveData(ActiveData.date == max(ActiveData.date),:) = [];
+
+numfunds = unique(ActiveData.fund);
+dates = unique(ActiveData.date);
+N = length(numfunds);
+
 %% Matriz de alfas gross of fees por cada fondo
-% Alineacion por fecha con unstack en vez de asignacion posicional.
-%
-% La version anterior hacia, por cada fondo:
-%   excess_return_matrix(:,i) = ActiveData.excess_return(ismember(fund, numfunds(i)))
-% lo que supone que todo fondo aporta exactamente length(dates) filas y en
-% orden de fecha. Con ActiveData2 eso ya no se cumple: un fondo del tramo
-% short tiene 119 de los 120 meses, y la asignacion falla con
-% "indices on the left side are not compatible with the size of the right".
-% El caso peligroso no es ese error sino el que no avisa: un fondo con las
-% filas desordenadas se asignaba sin queja y desalineaba toda la matriz.
-%
-% unstack hace el join por fecha y deja NaN donde falta el par (fondo, mes).
-% Los NaN se tratan explicitamente mas abajo con 'omitnan'.
-
-aux = table(ActiveData.date, categorical(ActiveData.fund), ...
-            ActiveData.excess_return, ActiveData.fee, ...
-            'VariableNames', {'date','fund','excess_return','fee'});
-
-if height(aux) ~= height(unique(aux(:,{'date','fund'})))
-    error('V2:duplicados', ...
-          'Hay pares (fecha, fondo) repetidos: unstack no puede resolverlos.');
+excess_return_matrix = nan(length(dates),N);
+for i = 1:N
+    excess_return_matrix(:,i) = ActiveData.excess_return(ismember(ActiveData.fund,numfunds(i)));
 end
 
-W_er  = sortrows(unstack(aux(:,{'date','fund','excess_return'}), ...
-                         'excess_return', 'fund'), 'date');
-W_fee = sortrows(unstack(aux(:,{'date','fund','fee'}), 'fee', 'fund'), 'date');
-
-dates    = W_er.date;
-numfunds = string(W_er.Properties.VariableNames(2:end));
-N        = numel(numfunds);
-
-excess_return_matrix = table2array(W_er(:,2:end));
-
-% fee es un valor unico por fondo propagado a todas las filas -- una foto
-% de la fecha de extraccion, no una serie historica. Se anualiza igual que
-% antes, pero conviene recordar que no varia en el tiempo.
-fees = table2array(W_fee(:,2:end)) ./ (12*100); %fees mensual
+fees = nan(length(dates),N);
+for i = 1:N
+    fees(:,i) = ActiveData.fee(ismember(ActiveData.fund,numfunds(i)))./(12*100); %fees mensual
+end
 
 excess_return_gross = excess_return_matrix + fees; % Matriz de alfas gross of fees
 
@@ -49,19 +34,13 @@ excess_return_gross = excess_return_matrix + fees; % Matriz de alfas gross of fe
 % Se considera que los fondos con IR>= 0.5 tienen fees más altos (promedio
 % de amundi y bnp), mientras que los otros tienen los fees más bajos
 % (pimco)
-TE = std(excess_return_gross,0,1,'omitnan')*sqrt(12);
+TE = std(excess_return_gross)*sqrt(12);
 index_TE =  find(TE<=0.01);
 
-% Separación por IR
+% Separación por IR 
 excess_return_gross = excess_return_gross(:,index_TE);
-
-% Anualizacion por fondo segun SUS meses observados, no length(dates).
-% Con un solo hueco, prod() sin 'omitnan' devolvia NaN para ese fondo y el
-% NaN se propagaba al promedio de toda la cartera.
-n_obs = sum(~isnan(excess_return_gross),1);
-alpha = prod(1+excess_return_gross,1,'omitnan').^(12./n_obs)-1;
-alpha(n_obs==0) = NaN;
-TE = std(excess_return_gross,0,1,'omitnan')*sqrt(12);
+alpha = (prod(1+excess_return_gross)).^(12/length(dates))-1;
+TE = std(excess_return_gross)*sqrt(12);
 IR = alpha./TE;
 
 index_IR_alto = find(IR >= 0.5);
@@ -112,31 +91,34 @@ resam_TE = zeros(Nsim,size(resample_excess_return_net,2));
 %IR_per = 75; 
 
 for i = 1:Nsim
-    Rs = resample_excess_return_net(:,:,i);
-    n_obs_s = sum(~isnan(Rs),1);
-    resam_alpha(i,:) = prod(1+Rs,1,'omitnan').^(12./n_obs_s)-1;
-    resam_TE(i,:) = std(Rs,0,1,'omitnan')*sqrt(12);
+    resam_alpha(i,:) = (prod(1+resample_excess_return_net(:,:,i))).^(12/length(dates))-1;
+    resam_TE(i,:) = std(resample_excess_return_net(:,:,i))*sqrt(12);
     %resam_IR(i,:) = resam_alpha(i,:)./resam_TE(i,:);
     
     %resam_IR_2 = resam_IR(i,:);
     %resam_change_IR(i) = (mean(resam_IR_2(resam_IR_2>prctile(resam_IR_2,IR_per)))-prctile(resam_IR_2,IR_per))/(length(resam_IR_2)-1);
 
-    pairwise_corr = corr(Rs,'rows','pairwise');
-    % Triangular inferior con mascara logica. La version anterior marcaba con
-    % ceros y luego filtraba con (pairwise_corr2 ~= 0), lo que descartaba
-    % tambien cualquier correlacion genuinamente igual a cero. Se siguen
-    % excluyendo los pares con correlacion exactamente 1, que vienen de
-    % fondos repetidos por el muestreo con reemplazo.
-    mask = tril(true(size(pairwise_corr)),-1) & pairwise_corr ~= 1;
-    resam_alpha_corr(i) = mean(pairwise_corr(mask),'omitnan');
+    pairwise_corr = corr(resample_excess_return_net(:,:,i));
+    for j = 1:size(pairwise_corr,1)
+        for k = 1:size(pairwise_corr,2)
+            if j <= k
+                pairwise_corr2(j,k)  = 0;
+            elseif pairwise_corr(j,k) == 1
+                pairwise_corr2(j,k) = 0;
+            else 
+                pairwise_corr2(j,k) = pairwise_corr(j,k);
+            end
+        end
+    end
+    resam_alpha_corr(i) = mean(pairwise_corr2(pairwise_corr2 ~= 0));
 end
 
-resam_port_alpha = mean(resam_alpha,2,'omitnan');
-resam_port_TE = mean(resam_TE,2,'omitnan');
+resam_port_alpha = mean(resam_alpha,2);
+resam_port_TE = mean(resam_TE,2);
 
-mean_resam_port_alpha = mean(resam_port_alpha,'omitnan');
-mean_resam_port_TE = mean(resam_port_TE,'omitnan');
-alpha_corr = mean(resam_alpha_corr,'omitnan');
+mean_resam_port_alpha = mean(resam_port_alpha);
+mean_resam_port_TE = mean(resam_port_TE);
+alpha_corr = mean(resam_alpha_corr);
 
 alpha_active = mean_resam_port_alpha;
 TE_active = mean_resam_port_TE;
